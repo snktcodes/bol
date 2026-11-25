@@ -622,18 +622,21 @@ final class Controller {
 				return
 			}
 			session.start(claudeToken: token)
-			self.audioQueue.async {
-				// Send what was captured while connecting.
-				let elapsed =
-					Int(Date().timeIntervalSince(current.startedAt) * Double(Constants.micBytesPerSecond)) & ~1
-				let bytes = min(self.ring.count, elapsed)
-				if bytes > 0 { session.send(pcm: self.ring.suffix(bytes)) }
-				self.audioTarget = session
-			}
+			self.sendCaptured(since: current.startedAt, to: session)
 		}
 
 		current.tick = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
 			self?.checkEndOfSpeech()
+		}
+	}
+
+	/// On the audio queue: sends `session` what the mic captured while it connected, then streams to it.
+	private func sendCaptured(since startedAt: Date, to session: SpeechToTextSession) {
+		audioQueue.async {
+			let elapsed = Int(Date().timeIntervalSince(startedAt) * Double(Constants.micBytesPerSecond)) & ~1
+			let bytes = min(self.ring.count, elapsed)
+			if bytes > 0 { session.send(pcm: self.ring.suffix(bytes)) }
+			self.audioTarget = session
 		}
 	}
 

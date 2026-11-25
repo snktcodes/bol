@@ -122,9 +122,9 @@ final class AudioDucker {
 		let running = MediaPlayer.running()
 		guard !running.isEmpty else { return }
 		isPausing = true
-		DispatchQueue.global(qos: .userInitiated).async {
+		DispatchQueue.global(qos: .userInitiated).async { [weak self] in
 			let paused = MediaPlayer.pause(players: running)
-			DispatchQueue.main.async { [weak self] in
+			DispatchQueue.main.async {
 				guard let self else { return }
 				self.isPausing = false
 				self.pausedPlayers = paused
@@ -223,7 +223,7 @@ final class AudioDucker {
 
 			let aggregate: [String: Any] = [
 				kAudioAggregateDeviceNameKey: "Bol Ducking",
-				kAudioAggregateDeviceUIDKey: "com.agentbol.bol.ducking.\(UUID().uuidString)",
+				kAudioAggregateDeviceUIDKey: "com.snktcodes.bol.ducking.\(UUID().uuidString)",
 				kAudioAggregateDeviceMainSubDeviceKey: outputUID,
 				kAudioAggregateDeviceIsPrivateKey: true,
 				kAudioAggregateDeviceIsStackedKey: false,
@@ -319,11 +319,25 @@ final class AudioDucker {
 
 		// MARK: Core Audio lookups
 
-		private static func read<T>(object: AudioObjectID, address: AudioObjectPropertyAddress, initial: T) -> T? {
+		/// A plain-value property (no object references: use `readString` for CFString properties).
+		private static func read<T: BitwiseCopyable>(
+			object: AudioObjectID, address: AudioObjectPropertyAddress, initial: T
+		) -> T? {
 			var address = address
 			var value = initial
 			var size = UInt32(MemoryLayout<T>.size)
 			return AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value) == 0 ? value : nil
+		}
+
+		/// A CFString property. Core Audio hands back a retained reference, which this takes ownership of.
+		private static func readString(object: AudioObjectID, address: AudioObjectPropertyAddress) -> String? {
+			var address = address
+			var value: Unmanaged<CFString>?
+			var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+			guard AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value) == 0, let value else {
+				return nil
+			}
+			return value.takeRetainedValue() as String
 		}
 
 		private static func defaultOutput() -> AudioObjectID? {
@@ -351,7 +365,7 @@ final class AudioDucker {
 			let address = AudioObjectPropertyAddress(
 				mSelector: kAudioDevicePropertyDeviceUID, mScope: kAudioObjectPropertyScopeGlobal,
 				mElement: kAudioObjectPropertyElementMain)
-			return read(object: device, address: address, initial: "" as CFString).map { $0 as String }
+			return readString(object: device, address: address)
 		}
 
 		private static func sampleRate(device: AudioObjectID) -> Double {

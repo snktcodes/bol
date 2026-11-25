@@ -465,9 +465,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 			title: "Open Bol…", action: #selector(openThreads), key: "t", symbol: "bubble.left.and.text.bubble.right")
 		if let shortcut = config.shortcuts.openBol { apply(shortcut: shortcut, item: openBol) }
 		menu.addItem(openBol)
-		menu.addItem(
-			item(title: "Check for Updates…", action: #selector(checkForUpdates), symbol: "arrow.triangle.2.circlepath")
-		)
+		if updates.isEnabled {
+			menu.addItem(
+				item(
+					title: "Check for Updates…", action: #selector(checkForUpdates),
+					symbol: "arrow.triangle.2.circlepath")
+			)
+		}
 		menu.addItem(item(title: "Settings…", action: #selector(openSettings), key: ",", symbol: "gearshape"))
 		menu.addItem(item(title: "Quit Bol", action: #selector(quit), key: "q", symbol: "power"))
 	}

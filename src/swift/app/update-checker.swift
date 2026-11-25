@@ -1,7 +1,7 @@
 import AppKit
 import UserNotifications
 
-/// A published release, as served by agentbol.com/latest.json (website/public/latest.json).
+/// A published release, as served by the update feed (`Constants.updateFeedURL`, e.g. website/public/latest.json).
 struct Release: Decodable, Equatable {
 	let version: String
 	/// Monotonic build number (CFBundleVersion); the only thing compared.
@@ -54,7 +54,8 @@ final class UpdateChecker: NSObject, ObservableObject, UNUserNotificationCenterD
 	/// Shows a short message in the voice bar (set by the app).
 	var announce: (_ title: String, _ detail: String) -> Void = { _, _ in }
 
-	private let feedURL: URL
+	/// nil when this build has no update feed: nothing is ever checked or downloaded.
+	private let feedURL: URL?
 	private let session: URLSession
 	private let currentBuild: Int?
 	private let defaults: UserDefaults
@@ -68,9 +69,12 @@ final class UpdateChecker: NSObject, ObservableObject, UNUserNotificationCenterD
 	private var idleMinutes = 0
 	private static let notifiedBuildKey = "BolNotifiedUpdateBuild"
 	private static let updatedFromKey = "BolUpdatedFromVersion"
-	/// Dev-only override, to try updates against a local feed: `defaults write com.agentbol.bol BolUpdateFeedURL <url>`.
+	/// Dev-only override, to try updates against a local feed: `defaults write com.snktcodes.bol BolUpdateFeedURL <url>`.
 	static let feedOverrideKey = "BolUpdateFeedURL"
 	fileprivate static let notificationCategory = "update"
+
+	/// Whether this build checks for updates at all (it has a feed).
+	var isEnabled: Bool { feedURL != nil }
 
 	static var currentVersion: String {
 		Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
@@ -94,7 +98,7 @@ final class UpdateChecker: NSObject, ObservableObject, UNUserNotificationCenterD
 
 	func start() {
 		// Unbundled runs (swift run, tests) have no build number to compare.
-		guard currentBuild != nil, Bundle.main.bundleIdentifier != nil else { return }
+		guard isEnabled, currentBuild != nil, Bundle.main.bundleIdentifier != nil else { return }
 		UNUserNotificationCenter.current().delegate = self
 		announceFinishedUpdate()
 		let timer = Timer(timeInterval: Constants.updateCheckSeconds, repeats: true) { [weak self] _ in
@@ -127,7 +131,7 @@ final class UpdateChecker: NSObject, ObservableObject, UNUserNotificationCenterD
 	/// Reads the feed once: updates `available` (calling `onChange` when it changes), then gets a newer
 	/// release ready to install, or notifies about it once when Bol can't update itself.
 	@MainActor func check(isManual: Bool = false) async {
-		guard let currentBuild else { return }
+		guard let currentBuild, let feedURL else { return }
 		switch status {
 		case .checking, .downloading, .installing: return
 		case .ready:
@@ -144,7 +148,9 @@ final class UpdateChecker: NSObject, ObservableObject, UNUserNotificationCenterD
 			let (data, response) = try await session.data(for: request)
 			guard (response as? HTTPURLResponse)?.statusCode == 200 else {
 				status = previous
-				if isManual { announce("Couldn't check for updates", "agentbol.com didn't answer. Try again later.") }
+				if isManual {
+					announce("Couldn't check for updates", "The update server didn't answer. Try again later.")
+				}
 				return
 			}
 			let release = try JSONDecoder().decode(Release.self, from: data)
@@ -176,7 +182,7 @@ final class UpdateChecker: NSObject, ObservableObject, UNUserNotificationCenterD
 	/// Downloads and checks the release so it can be installed; otherwise offers it as a download.
 	@MainActor private func prepare(release: Release) async {
 		guard installsUpdates else {
-			status = .manual("Download it from agentbol.com.")
+			status = .manual("Download it by hand.")
 			await notify(release: release)
 			return
 		}
@@ -234,7 +240,7 @@ final class UpdateChecker: NSObject, ObservableObject, UNUserNotificationCenterD
 			Log.info(message: "update: install failed: \(error.localizedDescription)")
 			status = .manual("Couldn't replace the app: \(error.localizedDescription)")
 			onChange?()
-			announce("Couldn't install the update", "Download it from agentbol.com instead.")
+			announce("Couldn't install the update", "Download it by hand instead.")
 		}
 	}
 

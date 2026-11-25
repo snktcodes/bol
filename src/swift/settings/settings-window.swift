@@ -1,6 +1,7 @@
 import AVFoundation
 import AppKit
 import ApplicationServices
+import Combine
 import ServiceManagement
 import SwiftUI
 

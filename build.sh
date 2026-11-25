@@ -68,7 +68,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <dict>
   <key>CFBundleName</key><string>Bol</string>
   <key>CFBundleDisplayName</key><string>Bol</string>
-  <key>CFBundleIdentifier</key><string>com.agentbol.bol</string>
+  <key>CFBundleIdentifier</key><string>com.snktcodes.bol</string>
   <key>CFBundleExecutable</key><string>Bol</string>
   <key>CFBundleIconFile</key><string>bol</string>
   <key>CFBundlePackageType</key><string>APPL</string>
@@ -85,25 +85,22 @@ PLIST
 
 # macOS ties privacy grants (mic, Accessibility, Screen Recording…) to the bundle id and signature. Local builds
 # sign with a stable self-signed identity so grants survive rebuilds: BOL_LOCAL_IDENTITY (default "Bol Local
-# Signing", or the older "Jarvis Local Signing"), else ad-hoc. Nested executables are signed first, then the app.
+# Signing"), else ad-hoc. Nested executables are signed first, then the app.
 if [[ -n "${BOL_SIGN_IDENTITY:-}" ]]; then
   echo "→ Signing with $BOL_SIGN_IDENTITY (hardened runtime)"
   SIGN=(--force --sign "$BOL_SIGN_IDENTITY" --options runtime --timestamp)
   codesign "${SIGN[@]}" --entitlements assets/entitlements/brain.entitlements \
     "$APP/Contents/Resources/brain/bol-brain" >/dev/null
   codesign "${SIGN[@]}" --entitlements assets/entitlements/bol.entitlements \
-    --identifier com.agentbol.bol "$APP" >/dev/null
+    --identifier com.snktcodes.bol "$APP" >/dev/null
   codesign --verify --deep --strict "$APP"
 else
-  IDENTITY=""
-  for NAME in "${BOL_LOCAL_IDENTITY:-Bol Local Signing}" "Jarvis Local Signing"; do
-    IDENTITY="$(security find-identity -p codesigning 2>/dev/null | awk -v n="\"$NAME\"" 'index($0, n) {print $2; exit}')"
-    [[ -n "$IDENTITY" ]] && { echo "→ Signing with $NAME"; break; }
-  done
-  [[ -n "$IDENTITY" ]] || echo "→ Signing (ad-hoc; permissions may reset after rebuilds)"
+  NAME="${BOL_LOCAL_IDENTITY:-Bol Local Signing}"
+  IDENTITY="$(security find-identity -p codesigning 2>/dev/null | awk -v n="\"$NAME\"" 'index($0, n) {print $2; exit}')"
+  if [[ -n "$IDENTITY" ]]; then echo "→ Signing with $NAME"; else echo "→ Signing (ad-hoc; permissions may reset after rebuilds)"; fi
   SIGN=(--force --sign "${IDENTITY:--}")
   codesign "${SIGN[@]}" "$APP/Contents/Resources/brain/bol-brain" >/dev/null
-  codesign "${SIGN[@]}" --identifier com.agentbol.bol "$APP" >/dev/null
+  codesign "${SIGN[@]}" --identifier com.snktcodes.bol "$APP" >/dev/null
 fi
 
 DEST="$APP"

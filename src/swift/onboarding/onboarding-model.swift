@@ -18,7 +18,7 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
 		case .permissions: return "Permissions"
 		case .autonomy: return "Autonomy"
 		case .ready: return "Ready"
-		case .terms: return "Terms"
+		case .terms: return "Heads-up"
 		}
 	}
 
@@ -75,7 +75,7 @@ final class OnboardingModel: ObservableObject {
 	@Published private(set) var inputLevel: Float = 0
 	/// Other dictation apps on this Mac (Wispr Flow, Hex…), found when the dictation step opens.
 	@Published private(set) var otherDictationApps: [DictationApp] = []
-	/// The box ticked on the Terms step. Agreeing is recorded when setup finishes (see `finish()`).
+	/// The box ticked on the last step ("Before you start"). It's recorded when setup finishes (see `finish()`).
 	@Published var isAgreeingToTerms = false
 	/// The dictation recommendation is applied once, the first time the step opens.
 	private var hasSuggestedDictation = false
@@ -148,9 +148,9 @@ final class OnboardingModel: ObservableObject {
 		step = next
 	}
 
-	/// The last step's button: records the agreement (version and time, on this Mac only) and starts Bol.
+	/// The last step's button: records the acknowledgement (version and time, on this Mac only) and starts Bol.
 	func finish() {
-		guard isComplete(step: .terms) else { return }  // Bol never starts without the Terms agreed to
+		guard isComplete(step: .terms) else { return }  // Bol never starts until "acts without asking" is acknowledged
 		stopWatching()
 		stopSpeechTest()
 		if !settings.config.hasAcceptedCurrentTerms { settings.config.acceptedTerms = .now() }
@@ -287,12 +287,21 @@ final class OnboardingModel: ObservableObject {
 		}
 	}
 
+	/// Shows the mic's level while the speech test listens.
+	private func startLevelMeter() {
+		levelTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+			guard let self else { return }
+			self.inputLevel = self.capture.level
+		}
+	}
+
 	/// Opens the mic and Claude's speech-to-text: proves the mic, the login and the subscription
 	/// work together. Passes once a sentence comes back.
 	func startSpeechTest() {
 		stopSpeechTest()
 		speechTest = .connecting
-		Task { @MainActor in
+		// Holds the model while the test runs; the session's callbacks still hold it weakly.
+		Task { @MainActor [self] in
 			guard let token = await ClaudeAuth.accessToken(isUserAction: true) else {
 				speechTest = .failed(reason: "Not signed in to Claude.")
 				return
@@ -327,10 +336,7 @@ final class OnboardingModel: ObservableObject {
 			speechSession = session
 			session.start(claudeToken: token)
 			speechTest = .listening(heard: "")
-			levelTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-				guard let self else { return }
-				self.inputLevel = self.capture.level
-			}
+			startLevelMeter()
 			// Nothing heard in 15 seconds: stop, so the mic isn't held.
 			try? await Task.sleep(nanoseconds: 15_000_000_000)
 			if session === speechSession, case .listening(let heard) = speechTest {

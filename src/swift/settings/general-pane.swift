@@ -1,6 +1,7 @@
 import AVFoundation
 import AppKit
 import ApplicationServices
+import Combine
 import ServiceManagement
 import SwiftUI
 
@@ -49,23 +50,31 @@ struct GeneralPane: View {
 	/// Version, automatic updates, and checking or installing by hand.
 	private var updatesGroup: some View {
 		SettingsGroup(title: "Updates") {
-			SettingsRow("Version", icon: "info.circle") {
+			SettingsRow(
+				"Version", icon: "info.circle",
+				help: updates.isEnabled ? nil : "This build doesn't check for updates: pull and rebuild to update"
+			) {
 				Text("Bol \(UpdateChecker.currentVersion)").font(UI.body.monospacedDigit()).foregroundStyle(.secondary)
 			}
-			SettingsRow(
-				"Install automatically", icon: "arrow.down.circle",
-				help: "Downloads new versions and restarts Bol when it's idle"
-			) {
-				Toggle("", isOn: $model.config.isAutoUpdateEnabled).labelsHidden().toggleStyle(.switch)
-					.controlSize(.small)
-			}
-			SettingsRow("Check for updates", icon: "arrow.triangle.2.circlepath", help: updateStatus) {
-				if updates.status == .ready {
-					Button("Restart to Update") { updates.install() }.buttonStyle(SubtleButtonStyle(isProminent: true))
-				} else {
-					Button("Check Now") { updates.checkNow() }.buttonStyle(SubtleButtonStyle())
-						.disabled([.checking, .downloading, .installing].contains(updates.status))
-				}
+			if updates.isEnabled { updateRows }
+		}
+	}
+
+	/// Automatic updates, and checking or installing by hand: only when this build has an update feed.
+	@ViewBuilder private var updateRows: some View {
+		SettingsRow(
+			"Install automatically", icon: "arrow.down.circle",
+			help: "Downloads new versions and restarts Bol when it's idle"
+		) {
+			Toggle("", isOn: $model.config.isAutoUpdateEnabled).labelsHidden().toggleStyle(.switch)
+				.controlSize(.small)
+		}
+		SettingsRow("Check for updates", icon: "arrow.triangle.2.circlepath", help: updateStatus) {
+			if updates.status == .ready {
+				Button("Restart to Update") { updates.install() }.buttonStyle(SubtleButtonStyle(isProminent: true))
+			} else {
+				Button("Check Now") { updates.checkNow() }.buttonStyle(SubtleButtonStyle())
+					.disabled([.checking, .downloading, .installing].contains(updates.status))
 			}
 		}
 	}

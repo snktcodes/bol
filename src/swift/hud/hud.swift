@@ -1039,7 +1039,7 @@ final class HUD {
 		hide(after: hideAfter)
 	}
 
-	/// Dev-only (defaults BolDevHooks, `com.agentbol.bol.previewHUD`): show the bar in `phase` with `text`
+	/// Dev-only (defaults BolDevHooks, `com.snktcodes.bol.previewHUD`): show the bar in `phase` with `text`
 	/// for `seconds`, then hide it. For visual checks only: no brain call, no speech, no mic.
 	func preview(
 		phase: HUDPhase, text: String, context: String = "", step: String = "", status: String? = nil,

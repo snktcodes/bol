@@ -41,10 +41,10 @@ enum Constants {
 
 	/// Dev-only hooks (demo recordings, HUD previews): `defaults write <bundle id> BolDevHooks -bool true`.
 	static let devHooksDefaultsKey = "BolDevHooks"
-	static let sayNotification = Notification.Name("com.agentbol.bol.say")
-	static let previewHUDNotification = Notification.Name("com.agentbol.bol.previewHUD")
+	static let sayNotification = Notification.Name("com.snktcodes.bol.say")
+	static let previewHUDNotification = Notification.Name("com.snktcodes.bol.previewHUD")
 	/// Dev-only: run a menu action by name (stop, newConversation, sendToBackground, stopBackground, state, permissions…).
-	static let actionNotification = Notification.Name("com.agentbol.bol.action")
+	static let actionNotification = Notification.Name("com.snktcodes.bol.action")
 
 	// MARK: Audio
 
@@ -75,17 +75,17 @@ enum Constants {
 
 	static let maxBrainRestarts = 5
 
-	// MARK: Terms
+	// MARK: Heads-up
 
-	/// The Terms of Service and Privacy Policy version users agree to in setup. Bump it (to the pages' new
-	/// effective date) when a change needs agreeing to again: setup then asks once more before Bol starts.
+	/// The version of setup's last step ("Before you start": Bol acts without asking) the user acknowledged.
+	/// Bump it (to the date of the change) when that page changes enough to need acknowledging again.
 	static let termsVersion = "2026-11-25"
-	static let termsURL = URL(string: "https://agentbol.com/terms")!
-	static let privacyURL = URL(string: "https://agentbol.com/privacy")!
 
 	// MARK: Updates
 
-	/// The latest release (website/public/latest.json, served by the agentbol Worker).
-	static let updateFeedURL = URL(string: "https://agentbol.com/latest.json")!
+	/// The update feed (a latest.json like website/public/latest.json). nil: this build never checks for
+	/// updates; update by pulling and rebuilding. Set it to your own feed to turn updates on, or try one with
+	/// `defaults write com.snktcodes.bol BolUpdateFeedURL <url>`.
+	static let updateFeedURL: URL? = nil
 	static let updateCheckSeconds: TimeInterval = 6 * 60 * 60
 }

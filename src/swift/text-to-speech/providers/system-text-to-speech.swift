@@ -20,7 +20,8 @@ struct SystemTextToSpeech: TextToSpeechProvider {
 			config.textToSpeech.system.voiceId.flatMap { AVSpeechSynthesisVoice(identifier: $0) } ?? Self.bestVoice()
 		utterance.rate = 0.52
 		return AsyncThrowingStream { continuation in
-			let synthesizer = AVSpeechSynthesizer()
+			// Captured by onTermination, which may run on another thread (unchanged behavior; marked to say so).
+			nonisolated(unsafe) let synthesizer = AVSpeechSynthesizer()
 			synthesizer.write(utterance) { buffer in
 				// An empty buffer marks the end.
 				guard let pcm = buffer as? AVAudioPCMBuffer, pcm.frameLength > 0 else {

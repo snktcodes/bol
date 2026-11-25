@@ -66,7 +66,7 @@ struct OnboardingView: View {
 
 	private var footer: some View {
 		HStack(spacing: 10) {
-			// Asked again for new Terms after setup was done: there's nothing to go back to.
+			// Asked again after setup was done (the last step changed): there's nothing to go back to.
 			if model.step != .welcome, !(model.step == .terms && settings.config.hasCompletedOnboarding) {
 				Button("Back") { model.goBack() }.buttonStyle(SubtleButtonStyle())
 			}
@@ -88,7 +88,7 @@ struct OnboardingView: View {
 		case .welcome: return "Get Started"
 		case .permissions: return model.isStepComplete ? "Continue" : "Skip for Now"
 		case .autonomy: return model.isComputerUseOn && model.isChromeControlOn ? "Continue" : "Skip for Now"
-		case .terms: return "Agree and Start Using Bol"
+		case .terms: return "Start Using Bol"
 		case .claudeCode, .account, .microphone, .voice, .dictation, .ready: return "Continue"
 		}
 	}
@@ -148,7 +148,7 @@ struct OnboardingView: View {
 				"Press \(ShortcutState.shared.talkText) anywhere and start talking. Pause as much as you like; press Enter to send."
 		case .terms:
 			return
-				"Bol acts on your Mac without asking first. Read what that means, then agree to start."
+				"Bol acts on your Mac without asking first. Read what that means, then tick the box to start."
 		}
 	}
 
@@ -690,7 +690,7 @@ private struct AutonomyStep: View {
 	}
 }
 
-/// The last step: what Bol does and who's responsible, and the Terms and Privacy Policy to agree to.
+/// The last step: what Bol does and who's responsible, acknowledged with one tick.
 private struct TermsStep: View {
 	@ObservedObject var model: OnboardingModel
 	@ObservedObject var settings: SettingsModel
@@ -725,18 +725,10 @@ private struct TermsStep: View {
 				)
 				point("Nothing collected", icon: "lock", text: "Everything stays in ~/.bol on this Mac.")
 			}
-			HStack(spacing: 10) {
-				Button("Terms of Service") { NSWorkspace.shared.open(Constants.termsURL) }
-					.buttonStyle(SubtleButtonStyle())
-				Button("Privacy Policy") { NSWorkspace.shared.open(Constants.privacyURL) }
-					.buttonStyle(SubtleButtonStyle())
-			}
 			Toggle(isOn: isAgreed) {
-				Text(
-					"I'm 18 or older (or an adult where I live), and I agree to the Terms of Service and Privacy Policy."
-				)
-				.font(UI.body)
-				.fixedSize(horizontal: false, vertical: true)
+				Text("I understand that Bol acts on my Mac without asking first.")
+					.font(UI.body)
+					.fixedSize(horizontal: false, vertical: true)
 			}
 			.toggleStyle(.checkbox)
 			.disabled(settings.config.hasAcceptedCurrentTerms)

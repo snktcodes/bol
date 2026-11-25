@@ -43,11 +43,11 @@ import Testing
 		let folder = FileManager.default.temporaryDirectory.appendingPathComponent("bol-verify-\(UUID().uuidString)")
 		defer { try? FileManager.default.removeItem(at: folder) }
 		let impostor = try makeApp(in: folder, name: "Impostor", bundleID: "com.example.other", build: "999")
-		let current = try makeApp(in: folder, name: "Current", bundleID: "com.agentbol.bol", build: "1")
+		let current = try makeApp(in: folder, name: "Current", bundleID: "com.snktcodes.bol", build: "1")
 		await #expect(throws: UpdateInstaller.Failure.badPackage("a different app's bundle id")) {
 			try await UpdateInstaller.verify(app: impostor, release: release(sha256: nil), against: current)
 		}
-		let wrongBuild = try makeApp(in: folder, name: "Old", bundleID: "com.agentbol.bol", build: "5")
+		let wrongBuild = try makeApp(in: folder, name: "Old", bundleID: "com.snktcodes.bol", build: "5")
 		await #expect(throws: UpdateInstaller.Failure.badPackage("its build doesn't match the release")) {
 			try await UpdateInstaller.verify(app: wrongBuild, release: release(sha256: nil), against: current)
 		}

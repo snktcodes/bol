@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Publishes a release: builds Bol.app signed with Developer ID, notarizes and staples it, wraps it in a signed,
-# notarized DMG, uploads that to R2 (bol-releases, served at dl.agentbol.com), then points agentbol.com/latest.json
-# (the feed Bol's update checker polls) and agentbol.com/download at it.
+# notarized DMG, uploads that to R2 ($BOL_R2_BUCKET, served at $BOL_DOWNLOAD_HOST), then points $BOL_SITE/latest.json
+# (the feed Bol's update checker polls) and $BOL_SITE/download at it.
 #
 # Usage: ./release.sh <version> <build> ["release notes"]      e.g. ./release.sh 0.2.0 2 "Faster replies."
 #
@@ -10,7 +10,10 @@
 #   - export BOL_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
 #   - xcrun notarytool store-credentials bol-notary --apple-id <id> --team-id <TEAMID> --password <app-specific>
 #     (or set BOL_NOTARY_PROFILE to another profile name)
-#   - cf signed in to the account that holds agentbol.com (cf auth login)
+#   - Your own site and download host (website/ deployed to it as a Cloudflare Worker, an R2 bucket behind the host):
+#     export BOL_SITE=example.com BOL_DOWNLOAD_HOST=https://dl.example.com BOL_R2_BUCKET=bol-releases
+#   - cf signed in to the account that holds $BOL_SITE (cf auth login)
+#   - Constants.updateFeedURL set to https://$BOL_SITE/latest.json (it's nil, updates off, until you do)
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT="$PWD"
@@ -19,14 +22,18 @@ VERSION="${1:-}"
 BUILD="${2:-}"
 NOTES="${3:-}"
 PROFILE="${BOL_NOTARY_PROFILE:-bol-notary}"
-BUCKET="bol-releases"
-DOWNLOAD_HOST="https://dl.agentbol.com"
+SITE="${BOL_SITE:-}"
+BUCKET="${BOL_R2_BUCKET:-}"
+DOWNLOAD_HOST="${BOL_DOWNLOAD_HOST:-}"
 FEED="$ROOT/website/public/latest.json"
 REDIRECTS="$ROOT/website/public/_redirects"
 
 die() { echo "✘ $*" >&2; exit 1; }
 [[ "$VERSION" =~ '^[0-9]+\.[0-9]+\.[0-9]+$' ]] || die "usage: ./release.sh <version x.y.z> <build> [notes]"
 [[ "$BUILD" =~ '^[0-9]+$' ]] || die "build must be an integer"
+[[ -n "$SITE" && -n "$BUCKET" && -n "$DOWNLOAD_HOST" ]] || die "set BOL_SITE, BOL_DOWNLOAD_HOST and BOL_R2_BUCKET"
+grep -q "updateFeedURL: URL? = URL(string: \"https://$SITE/latest.json\")" src/swift/app/constants.swift \
+  || die "set Constants.updateFeedURL to https://$SITE/latest.json first, or the release can't update itself"
 [[ -n "${BOL_SIGN_IDENTITY:-}" ]] || die "set BOL_SIGN_IDENTITY to your Developer ID Application identity"
 security find-identity -p codesigning -v | grep -qF "$BOL_SIGN_IDENTITY" || die "identity not in keychain"
 CURRENT_BUILD="$(bun -e "console.log(JSON.parse(await Bun.file('$FEED').text()).build)")"
@@ -72,7 +79,7 @@ cf r2 objects put "$DMG_NAME" --bucket-name "$BUCKET" --file "$DMG" \
   --content-type application/x-apple-diskimage -q >/dev/null
 # The edge may hold an earlier response for this URL (e.g. a 404 from before the upload): drop it, then check
 # that what people actually download is this DMG, byte for byte.
-cf cache purge -z agentbol.com --force --body "{\"files\":[\"$URL\"]}" >/dev/null
+cf cache purge -z "$SITE" --force --body "{\"files\":[\"$URL\"]}" >/dev/null
 curl -sfL "$URL" -o "$WORK/check.dmg" || die "$URL isn't downloadable after upload"
 [[ "$(shasum -a 256 "$WORK/check.dmg" | cut -d' ' -f1)" == "$SHA256" ]] || die "$URL doesn't serve the uploaded DMG"
 
@@ -95,13 +102,13 @@ website/deploy.sh "Release $VERSION ($BUILD)"
 # A deploy takes a few seconds to reach every edge: wait for the feed and /download to show this release.
 for attempt in {1..24}; do
   FEED_OK=0; DOWNLOAD_OK=0
-  curl -sf "https://agentbol.com/latest.json?v=$BUILD-$attempt" | grep -q "\"build\": $BUILD" && FEED_OK=1
-  [[ "$(curl -s -o /dev/null -w '%{redirect_url}' "https://agentbol.com/download?v=$BUILD-$attempt")" == "$URL"* ]] && DOWNLOAD_OK=1
+  curl -sf "https://$SITE/latest.json?v=$BUILD-$attempt" | grep -q "\"build\": $BUILD" && FEED_OK=1
+  [[ "$(curl -s -o /dev/null -w '%{redirect_url}' "https://$SITE/download?v=$BUILD-$attempt")" == "$URL"* ]] && DOWNLOAD_OK=1
   (( FEED_OK && DOWNLOAD_OK )) && break
   sleep 5
 done
 (( FEED_OK )) || die "the live feed doesn't show build $BUILD after 2 minutes"
-(( DOWNLOAD_OK )) || die "agentbol.com/download doesn't point at $URL after 2 minutes"
+(( DOWNLOAD_OK )) || die "$SITE/download doesn't point at $URL after 2 minutes"
 
 echo "✓ Released Bol $VERSION ($BUILD): $URL"
 echo "  sha256 $SHA256"

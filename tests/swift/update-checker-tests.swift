@@ -8,7 +8,7 @@ import Testing
 
 	private func release(build: Int, minimum: String? = nil) -> Release {
 		Release(
-			version: "0.2.0", build: build, url: URL(string: "https://dl.agentbol.com/Bol-0.2.0.dmg")!,
+			version: "0.2.0", build: build, url: URL(string: "https://downloads.example.com/Bol-0.2.0.dmg")!,
 			minimumSystemVersion: minimum, notes: nil)
 	}
 
@@ -27,11 +27,25 @@ import Testing
 
 	@Test func decodesTheFeed() throws {
 		let json = """
-			{"version":"0.1.0","build":1,"url":"https://dl.agentbol.com/Bol-0.1.0.dmg","sha256":"",
+			{"version":"0.1.0","build":1,"url":"https://downloads.example.com/Bol-0.1.0.dmg","sha256":"",
 			"minimumSystemVersion":"13.0","releasedAt":"2026-11-25T00:00:00Z","notes":"First public release."}
 			"""
 		let release = try JSONDecoder().decode(Release.self, from: Data(json.utf8))
 		#expect(release.build == 1 && release.minimumSystemVersion == "13.0")
+	}
+
+	@Test @MainActor func withoutAFeedNothingIsChecked() async {
+		#expect(Constants.updateFeedURL == nil)
+		let defaults = UserDefaults(suiteName: "bol-update-tests-\(UUID().uuidString)")!
+		// The stub would offer build 2 if the checker asked anyone.
+		FeedStub.respond(status: 200, body: Self.feedV2)
+		let configuration = URLSessionConfiguration.ephemeral
+		configuration.protocolClasses = [FeedStub.self]
+		let checker = UpdateChecker(
+			session: URLSession(configuration: configuration), currentBuild: 1, defaults: defaults)
+		#expect(!checker.isEnabled)
+		await checker.check(isManual: true)
+		#expect(checker.available == nil && checker.status == .idle)
 	}
 
 	// MARK: The whole check, against a stubbed feed
@@ -54,7 +68,7 @@ import Testing
 	}
 
 	private static let feedV2 = """
-		{"version":"0.2.0","build":2,"url":"https://dl.agentbol.com/Bol-0.2.0.dmg","minimumSystemVersion":"13.0","notes":"Faster."}
+		{"version":"0.2.0","build":2,"url":"https://downloads.example.com/Bol-0.2.0.dmg","minimumSystemVersion":"13.0","notes":"Faster."}
 		"""
 
 	@Test @MainActor func findsANewerReleaseAndNotifiesOnce() async {
